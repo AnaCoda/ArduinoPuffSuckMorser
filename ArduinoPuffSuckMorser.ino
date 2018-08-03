@@ -1,4 +1,7 @@
-/* Based on tutorial at http://mypetarduino.com/ReadCode/readCode.01.html */
+/*
+Based on tutorial at http://mypetarduino.com/ReadCode/readCode.01.html
+and https://vk8da.com/an-arduino-iambic-keyer/
+*/
 
 // Iambic keyer
 #define DIT_PIN 8
