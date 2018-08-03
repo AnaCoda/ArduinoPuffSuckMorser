@@ -1,6 +1,13 @@
 /*
 Based on tutorial at http://mypetarduino.com/ReadCode/readCode.01.html
-and https://vk8da.com/an-arduino-iambic-keyer/
+
+WB7FHC's Morse Code Decoder v. 1.1 (c) 2014, Budd Churchward - WB7FHC This is an Open Source Project http://opensource.org/licenses/MIT
+Search YouTube for 'WB7FHC' to see several videos of this project as it was developed.
+
+and https://vk8da.com/an-arduino-iambic-keyer/, which further gives credit to http://www.jel.gr/cw-mode/iambic-keyer-with-arduino-in-5-minutes/
+(looks like a dead page).
+
+No licenses found for the latter 2, please inform me if you find one!
 */
 
 // Iambic keyer
