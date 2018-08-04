@@ -104,10 +104,12 @@ void contact(unsigned char state)
   if (state)
   {
     digitalWrite(LED, HIGH);
+    tone(SPEAKER, 650);
   }
   else
   {
     digitalWrite(LED, LOW);
+    noTone(SPEAKER);
   }
 }
 
