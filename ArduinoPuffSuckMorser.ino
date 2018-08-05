@@ -14,6 +14,7 @@ No licenses found for the latter 2, please inform me if you find one!
 #define DIT_PIN 8
 #define DAH_PIN 10
 #define LED 13
+#define SPEAKER 11
 #define BAUD_DURATION 150  //mSec default
 #define TOUCH_THRESHOLD 0 // how long to wait in uSec, before sampling the touch pin.
 
