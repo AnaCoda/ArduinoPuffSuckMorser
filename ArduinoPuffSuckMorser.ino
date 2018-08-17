@@ -15,12 +15,6 @@ No licenses found for the latter 2, please inform me if you find one!
 #define DAH_PIN 10
 #define LED 13
 #define SPEAKER 11
-#define BAUD_DURATION 150  //mSec default
-#define TOUCH_THRESHOLD 0 // how long to wait in uSec, before sampling the touch pin.
-
-// baud up/down pins
-#define BAUDUP_PIN 7
-#define BAUDDOWN_PIN 4
 
 // keyer state
 enum
@@ -33,69 +27,68 @@ enum
 int dit, dah;
 int state;
 
+/* The way we are translating morse code is we have a start bit (1) and for each dot, we shift
+ * our number left. For each dash, we add one and shift our number left. The seemingly random
+ * letterset array has the corresponding letters.
+ */
+char LetterSet[] = "##TEMNAIOGKDWRUS##QZYCXBJP#L#FVH09#8###7#####\\=61####+##2###3#45";
+
 // baud settings
-#define BAUD_MIN 10
-#define BAUD_MAX 200
+#define BAUD_DURATION               120                  //mSec default
+#define TOUCH_THRESHOLD             0                   //how long to wait in uSec, before sampling the touch pin.
+#define interbaud_duration          BAUD_DURATION * 1   //wait between dots and dashes
+#define dit_duration                BAUD_DURATION * 1   //length of a dot
+#define dah_duration                BAUD_DURATION * 3   //length of a dash
+#define NearLineEnd                 60                  //number of characters before sending newline (to make serial easier to read)
 
-unsigned long baud = BAUD_DURATION;
+//waits
+#define FullWait                    BAUD_DURATION * 1 //Length between characters
+#define WordWait                    BAUD_DURATION * 4   //Length between words
 
-unsigned long interbaud_duration = baud * 1;
-unsigned long dit_duration = baud;
-unsigned long dah_duration = baud * 3;
-
-char mySet[] = "##TEMNAIOGKDWRUS##QZYCXBJP#L#FVH09#8###7#######61#######2###3#45";
-
-long FullWait = BAUD_DURATION / 2;
-long WaitWait = FullWait;
-
-int nearLineEnd = 60;
-int letterCount = 0;
-
+int WaitWait = FullWait;        //Character counter
 boolean characterDone = true;
+int letterCount = 0;            //Line end counter
+uint8_t downtime = 0;           //Counts a dit or a dah
+int ShiftNum = 0;               //Number to be shifted and added to depending on dits or dahs
+int NewWord = WordWait;         //Word counter
 
-uint8_t downtime = 0;
-
-int myNum = 0;
-
-long newWord = FullWait * 10;
-
-void readDit()
+void readDit()  //Checks if there's a dit
 {
   delayMicroseconds(TOUCH_THRESHOLD);
   if (digitalRead(DIT_PIN))
   {
-    dit = 0;
+    dit = 1;
   }
   else
   {
-    dit = 1;
+    dit = 0;
   }
 }
 
-void readDah()
+void readDah()  //Checks if there's a dah
 {
   delayMicroseconds(TOUCH_THRESHOLD);
   if (digitalRead(DAH_PIN))
   {
-    dah = 0;
+    dah = 1;
   }
   else
   {
-    dah = 1;
+    dah = 0;
   }
 }
 
 void setup()
 {
   // setup input pins
-  pinMode(DIT_PIN, INPUT_PULLUP);
-  pinMode(DAH_PIN, INPUT_PULLUP);
+  pinMode(DIT_PIN, INPUT);
+  pinMode(DAH_PIN, INPUT);
 
   // setup output pins
   pinMode(LED, OUTPUT);
   digitalWrite(LED, LOW); //turn off led
   Serial.begin(9600);
-  state = 0;
+  state = IDLE;
 }
 
 // handles the output of the ciruit.
@@ -116,12 +109,14 @@ void contact(unsigned char state)
 
 void loop()
 {
-  if (state == IDLE)
+  if (state == IDLE)  //If nothing is being pressed
   {
-    if (newWord > 0)
-      newWord--;
-    if (newWord == 1)
-      printSpace();
+    if (NewWord > 0)
+      NewWord--;  //Deplete new word counter
+    if (NewWord == 1)
+      printSpace(); //Print space if the counter is done (word over)
+
+    // now, if dit is pressed go there, else check for dah
     readDit();
     if (dit)
     {
@@ -129,38 +124,42 @@ void loop()
     }
     else
     {
-      delayMicroseconds(0);
       readDah();
       if (dah)
       {
         state = DAH;
       }
     }
+    
     if (!characterDone)
     {
-      WaitWait--; //We are counting down
-      if (WaitWait == 0)
+      WaitWait--; //Count down the character counter
+      if (WaitWait == 0) //Character is done
       {
-        printCharacter();
-        characterDone = true;
-        myNum = 0;
+        printCharacter(); //Print it
+        characterDone = true; //The character is done
+        ShiftNum = 0; //Reset the shifting number
       }
     }
   }
-  else if (state == 1)
+  else if (state == DIT)
   {
-    WaitWait = FullWait;
+    WaitWait = FullWait; //Reset the counters
+    NewWord = WordWait;
     characterDone = false;
+    
     contact(1);
     delay(dit_duration);
     contact(0);
     delay(interbaud_duration);
     downtime++;
-    if (myNum == 0)
+    
+    if (ShiftNum == 0)
     {
-      myNum = 1; // This is our start bit
+      ShiftNum = 1; // This is our start bit
     }
-    printMorse();
+    shiftBits();
+    
     // now, if dah is pressed go there, else check for dit
     readDah();
     if (dah)
@@ -182,22 +181,24 @@ void loop()
       }
     }
   }
-
   else if (state == DAH)
   {
-    //Serial.println("dah");
-    WaitWait = FullWait;
+    WaitWait = FullWait; //Reset counters
+    NewWord = WordWait;
     characterDone = false;
+    
     contact(1);
     delay(dah_duration);
     contact(0);
     delay(interbaud_duration);
     downtime += 3;
-    if (myNum == 0)
+    
+    if (ShiftNum == 0)
     {
-      myNum = 1; // This is our start bit
+      ShiftNum = 1; // This is our start bit
     }
-    printMorse();
+    shiftBits();
+    
     // now, if dit is pressed go there, else check for dah
     readDit();
     if (dit)
@@ -218,67 +219,74 @@ void loop()
         state = IDLE;
       }
     }
-  } // switch
+  }
   delay(1);
 }
 
 void printSpace()
 {
   letterCount++;
-  if (letterCount > nearLineEnd)
+  if (letterCount > NearLineEnd)
   {
-    Serial.println();
+    Serial.println(); //Print newline if we're over 60 characters on the current line
     letterCount = 0;
     return; // Go back to loop(), we're done here.
   }
   Serial.print(' ');
 }
 
-void printMorse()
+void shiftBits()
 {
   //Serial.println('m');
   if (downtime == 1)
   {
-    // We got a dit
-    myNum = myNum << 1; //shift bits left
-    myNum++;
+    ShiftNum = ShiftNum << 1; // shift bits left
+    ShiftNum++; //Add one
   }
   else if (downtime == 3)
   {
     // We got a dah
-    myNum = myNum << 1; // shift bits left
+    ShiftNum = ShiftNum << 1; // shift bits left
   }
   downtime = 0;
 }
 
 void printCharacter()
 {
-  newWord = FullWait * 10;
+  NewWord = WordWait;
   letterCount++;
-  if (myNum > 63)
+  if (ShiftNum > 63)  //Not in the array
   {
     printPunctuation();
     return; // Go back to the main loop(), we're done here.
   }
-  Serial.print(mySet[myNum]);
+  Serial.print(LetterSet[ShiftNum]);
 }
 
 void printPunctuation()
 {
   char pMark = '#'; // Just in case nothing matches
-  if (myNum == 71)
+  if (ShiftNum == 71)
     pMark = ':';
-  if (myNum == 76)
+  else if (ShiftNum == 76)
     pMark = ',';
-  if (myNum == 84)
+  else if (ShiftNum == 85)
+    pMark = ';';
+  else if (ShiftNum == 84)
     pMark = '!';
-  if (myNum == 94)
+  else if (ShiftNum == 94)
     pMark = '-';
-  if (myNum == 101)
+  else if (ShiftNum == 97)
+    pMark = '\'';
+  else if (ShiftNum == 101)
     pMark = '@';
-  if (myNum == 106)
+  else if (ShiftNum == 106)
     pMark = '.';
-  if (myNum == 115)
+  else if (ShiftNum == 109)
+    pMark = '"';
+  else if (ShiftNum == 114)
+    pMark = '_';
+  else if (ShiftNum == 115)
     pMark = '?';
   Serial.print(pMark);
 }
