@@ -1,5 +1,8 @@
 # ArduinoPuffSuckMorser
 
+Created for the 2018 Hackaday prize:
+https://hackaday.io/project/160107-puff-suck-interface-for-fast-text-input
+
 Credit:
 
 http://mypetarduino.com/ReadCode/readCode.01.html
